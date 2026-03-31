@@ -1,0 +1,7 @@
+__pycache__/
+*.pyc
+.env
+agent_memory.md
+*.db
+*.jsonl
+traces/
