@@ -251,6 +251,36 @@ Every file cites its sources in the docstring. Key papers:
 - MemoryBank (Zhong et al., 2024) — [arxiv.org/abs/2401.10917](https://arxiv.org/abs/2401.10917)
 - xMemory (2025) — [arxiv.org/abs/2502.13743](https://arxiv.org/abs/2502.13743)
 
+## benchmarks
+
+How do you know if a memory system actually works? These benchmarks measure different aspects:
+
+| Benchmark | Year | What It Tests | Link |
+|-----------|------|---------------|------|
+| **bAbI** | 2015 | 20 toy reasoning tasks (basic fact recall, deduction) | [facebookresearch/bAbI](https://github.com/facebookarchive/bAbI) |
+| **LoCoMo** | 2024 | Long-term conversational memory across multi-session dialogues (~26K tokens each) | [snap-research/locomo](https://snap-research.github.io/locomo/) |
+| **LongMemEval** | 2024 | Long-term interactive memory for chat assistants (4 categories: knowledge, preference, event, session) | [arxiv.org/abs/2410.10876](https://arxiv.org/abs/2410.10876) |
+| **MemBench** | 2025 | Comprehensive evaluation: effectiveness, efficiency, capacity of LLM agent memory | [arxiv.org/abs/2507.05257](https://arxiv.org/abs/2507.05257) |
+| **MemoryAgentBench** | 2025 | Memory retention, update, retrieval, conflict resolution in multi-turn settings | [HUST-AI-HYZ/MemoryAgentBench](https://github.com/HUST-AI-HYZ/MemoryAgentBench) (ICLR 2026) |
+| **MemoryArena** | 2026 | Interdependent multi-session agentic tasks (web nav, planning, search) | [memoryarena.github.io](https://memoryarena.github.io/) |
+
+```
+    BENCHMARK LANDSCAPE
+    ===================
+
+    bAbI (2015)           ── basic reasoning
+         |
+    LoCoMo (2024)         ── long conversations
+    LongMemEval (2024)    ── chat assistant memory
+         |
+    MemBench (2025)       ── comprehensive: efficiency + capacity
+    MemoryAgentBench (2025) ── CRUD + conflict resolution
+         |
+    MemoryArena (2026)    ── real agentic workflows
+
+    Trend: toy tasks → real conversations → full agent evaluation
+```
+
 ---
 
 ## license

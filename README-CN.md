@@ -250,6 +250,36 @@ Mem0、Zep、Graphiti SDK 并排对比。~120 行。
 - MemoryBank (Zhong et al., 2024) — [arxiv.org/abs/2401.10917](https://arxiv.org/abs/2401.10917)
 - xMemory (2025) — [arxiv.org/abs/2502.13743](https://arxiv.org/abs/2502.13743)
 
+## 记忆评测基准
+
+怎么知道一个记忆系统是否真的有效？这些 benchmark 从不同角度衡量：
+
+| Benchmark | 年份 | 测试内容 | 链接 |
+|-----------|------|----------|------|
+| **bAbI** | 2015 | 20 个基础推理任务（事实回忆、演绎） | [facebookresearch/bAbI](https://github.com/facebookarchive/bAbI) |
+| **LoCoMo** | 2024 | 跨多会话对话的长期记忆（每段 ~26K tokens） | [snap-research/locomo](https://snap-research.github.io/locomo/) |
+| **LongMemEval** | 2024 | 聊天助手长期交互记忆（知识、偏好、事件、会话 4 类） | [arxiv.org/abs/2410.10876](https://arxiv.org/abs/2410.10876) |
+| **MemBench** | 2025 | 综合评估：记忆的有效性、效率和容量 | [arxiv.org/abs/2507.05257](https://arxiv.org/abs/2507.05257) |
+| **MemoryAgentBench** | 2025 | 记忆保留、更新、检索、冲突解决（多轮交互） | [HUST-AI-HYZ/MemoryAgentBench](https://github.com/HUST-AI-HYZ/MemoryAgentBench) (ICLR 2026) |
+| **MemoryArena** | 2026 | 多会话关联任务（网页导航、规划、搜索） | [memoryarena.github.io](https://memoryarena.github.io/) |
+
+```
+    BENCHMARK 演进
+    ===============
+
+    bAbI (2015)             ── 基础推理
+         |
+    LoCoMo (2024)           ── 长对话记忆
+    LongMemEval (2024)      ── 聊天助手记忆
+         |
+    MemBench (2025)         ── 综合评估：效率 + 容量
+    MemoryAgentBench (2025) ── CRUD + 冲突解决
+         |
+    MemoryArena (2026)      ── 真实 Agent 工作流
+
+    趋势：玩具任务 → 真实对话 → 完整 Agent 评估
+```
+
 ---
 
 ## 许可证
