@@ -1,52 +1,39 @@
-# nanoMemory
+English | [中文](README-CN.md)
 
-**If you can read ~200 lines of Python, you understand agent memory.**
+> _"Memory is the treasure house of the mind."_ — Thomas Fuller
 
-A minimal, progressive demonstration of 9 different agent memory architectures — each self-contained in ~80-150 lines of Python.
+If you can read ~200 lines of Python, you understand agent memory.
 
-[中文文档](README-CN.md)
+A minimal, progressive demonstration of 9 different agent memory architectures. Each level is one self-contained file, ~80-150 lines.
 
----
+## install
 
-## What It Is
-
-Most agent memory tutorials show one approach. This project shows **nine**, each a fundamentally different way to build memory:
-
-| Level | Method | File | Lines |
-|:-----:|--------|------|:-----:|
-| 0 | No memory | `agent.py` | ~30 |
-| 1 | Text + Keyword | `memory_file.py` | ~80 |
-| 2 | Vector Embedding | `memory_vector.py` | ~100 |
-| 3 | Cognitive Scoring | `memory_scored.py` | ~120 |
-| 4 | Knowledge Graph | `memory_graph.py` | ~150 |
-| 5 | Summary Compression | `memory_summary.py` | ~80 |
-| 6 | Hierarchical Memory | `memory_hierarchical.py` | ~100 |
-| 7 | Agentic Lifecycle | `memory_lifecycle.py` | ~120 |
-| 8 | Production Tools | `memory_production.py` | ~120 |
-
----
-
-## Why It Exists
-
-Agent memory systems are rapidly evolving but often presented as black boxes. This project takes the opposite stance:
-
-- **Each level is one file.** No imports between levels. Read top to bottom.
-- **Each level is a different paradigm.** Not feature stacking — fundamentally different ways to store and retrieve memory.
-- **Every file cites its sources.** Academic papers, GitHub repos, and survey references in the docstring.
-
----
-
-## Quick Start
-
-```bash
+```
 pip install -r requirements.txt
+```
 
-export OPENAI_API_KEY="your-key"
-# Optional:
-export OPENAI_BASE_URL="https://api.openai.com/v1"
-export OPENAI_MODEL="gpt-4o-mini"
-export OPENAI_EMBED_MODEL="text-embedding-3-small"
+Set your environment variables:
 
+__macOS/Linux:__
+
+```
+export OPENAI_API_KEY='your-key-here'
+export OPENAI_BASE_URL='https://api.openai.com/v1'  # optional
+export OPENAI_MODEL='gpt-4o-mini'  # optional
+export OPENAI_EMBED_MODEL='text-embedding-3-small'  # optional
+```
+
+__Windows (PowerShell):__
+
+```
+$env:OPENAI_API_KEY='your-key-here'
+$env:OPENAI_BASE_URL='https://api.openai.com/v1'
+$env:OPENAI_MODEL='gpt-4o-mini'
+```
+
+## quick start
+
+```
 python agent.py "Hello, I'm Alice"
 python memory_file.py "I prefer dark mode"
 python memory_vector.py "What do you know about me?"
@@ -58,70 +45,86 @@ python memory_lifecycle.py "Forget my old address, I moved"
 python memory_production.py  # prints comparison table
 ```
 
----
+## how it works
 
-## Level Details
+Each level demonstrates a fundamentally different way to build memory — not feature stacking, but different paradigms.
 
-### Level 0: No Memory
-Baseline agent with tool use. No state persists between conversations.
+| level | method | storage | retrieval |
+|:-----:|--------|---------|-----------|
+| 0 | no memory | none | none |
+| 1 | text + keyword | JSONL | string matching |
+| 2 | vector embedding | JSONL + embeddings | cosine similarity |
+| 3 | cognitive scoring | JSONL + embeddings | alpha*sim + beta*recency + gamma*importance |
+| 4 | knowledge graph | SQLite SPO triples | graph traversal + temporal |
+| 5 | summary compression | compressed summaries | keyword over summaries |
+| 6 | hierarchical | 3-level: raw -> episode -> theme | top-down drill |
+| 7 | agentic lifecycle | JSONL with CRUD | agent-controlled tool calls |
+| 8 | production tools | Mem0 / Zep / Graphiti | SDK-provided |
 
-### Level 1: Text + Keyword
-LLM extracts facts into a JSONL file. Keyword matching for retrieval. The simplest cross-session memory.
+The agent loop is the same everywhere: retrieve memories -> inject into prompt -> LLM response -> extract/save memories. What changes is *how* you store and *how* you retrieve.
 
-### Level 2: Vector Embedding
-OpenAI embeddings + numpy cosine similarity replace keyword matching. Semantic search, not just string matching.
-
-### Level 3: Cognitive Scoring
-Three-factor retrieval: `alpha*similarity + beta*recency + gamma*importance`. Ebbinghaus-inspired decay. Reflection mechanism distills memories into higher-level insights.
-
-### Level 4: Knowledge Graph
-(SPO) triples in SQLite. Temporal reasoning with `valid_from`/`valid_until`. Entity normalization. Contradiction detection.
-
-### Level 5: Summary Compression
-LLM compresses conversations into summaries. Periodic consolidation merges old summaries. Trades fidelity for capacity.
-
-### Level 6: Hierarchical Memory
-3-level hierarchy: raw messages -> episodes -> themes. Top-down retrieval mirrors human recall: gist first, then details.
-
-### Level 7: Agentic Lifecycle
-The agent itself controls memory via tool calls: `save`, `delete`, `update`, `search`. No passive auto-extraction — the agent decides what to remember and what to forget.
-
-### Level 8: Production Tools
-Side-by-side comparison of Mem0, Zep, and Graphiti SDKs. Install instructions, usage examples, and a comparison table.
-
-```bash
-pip install mem0ai         # Mem0: fact extraction + vector/graph
-pip install zep-cloud      # Zep: temporal knowledge graph
-pip install graphiti-core  # Graphiti: SPO triples + Neo4j
+```python
+# The core pattern across all levels:
+for _ in range(max_iterations):
+    response = client.chat.completions.create(model=model, messages=messages)
+    if not response.choices[0].message.tool_calls:
+        return response.choices[0].message.content
+    # execute tool calls, append results, repeat
 ```
 
----
+## levels
 
-## Architecture Principles
+### level 0: no memory
+Baseline agent. No state between conversations. ~30 lines.
+
+### level 1: text + keyword
+LLM extracts facts into JSONL. Keyword matching for retrieval. Capped at 200 memories. ~80 lines.
+
+### level 2: vector embedding
+OpenAI embeddings replace keyword matching. Semantic search via numpy cosine similarity. ~100 lines.
+
+### level 3: cognitive scoring
+Park-style three-factor scoring: similarity x recency x importance. Ebbinghaus decay curve. Reflection mechanism distills memories into insights. ~120 lines.
+
+### level 4: knowledge graph
+(subject, predicate, object) triples in SQLite. Temporal reasoning. Entity normalization. Contradiction detection — new facts invalidate conflicting old ones. ~150 lines.
+
+### level 5: summary compression
+LLM compresses conversations into summaries instead of storing raw text. Periodic consolidation merges old summaries into one. ~80 lines.
+
+### level 6: hierarchical memory
+3-level hierarchy: raw messages -> episodes -> themes. Top-down retrieval mirrors human recall — you remember the gist, then the details. ~100 lines.
+
+### level 7: agentic lifecycle
+The agent itself controls memory via tool calls: `save`, `delete`, `update`, `search`. No passive auto-extraction. The agent decides what to remember and what to forget. ~120 lines.
+
+### level 8: production tools
+Side-by-side comparison of open-source memory frameworks:
 
 ```
-Storage Paradigms (what you store)
-  Text -> Vector -> Graph -> Summary -> Hierarchy
-
-Retrieval Strategies (how you search)
-  Keyword -> Cosine -> Scoring -> Graph -> Top-down
-
-Control Model (who decides)
-  Auto-extract (L0-6) -> Agent-controlled (L7) -> Production SDKs (L8)
+pip install mem0ai         # fact extraction + vector/graph
+pip install zep-cloud      # temporal knowledge graph
+pip install graphiti-core  # SPO triples + Neo4j
 ```
 
----
+Includes install instructions, usage examples, and a comparison table. ~120 lines.
 
-## Key References
+## references
+
+Every file cites its sources in the docstring. Key papers:
 
 - Park et al. (2023) "Generative Agents" — [arxiv.org/abs/2304.03442](https://arxiv.org/abs/2304.03442)
-- "Memory in the Age of AI Agents" Survey — [arxiv.org/abs/2512.13564](https://arxiv.org/abs/2512.13564)
+- "Memory in the Age of AI Agents" survey — [arxiv.org/abs/2512.13564](https://arxiv.org/abs/2512.13564)
 - MemGPT (Packer et al., 2023) — [arxiv.org/abs/2310.08560](https://arxiv.org/abs/2310.08560)
 - MemoryBank (Zhong et al., 2024) — [arxiv.org/abs/2401.10917](https://arxiv.org/abs/2401.10917)
-- xMemory (2025) Hierarchical Retrieval — [arxiv.org/abs/2502.13743](https://arxiv.org/abs/2502.13743)
+- xMemory (2025) — [arxiv.org/abs/2502.13743](https://arxiv.org/abs/2502.13743)
 
 ---
 
-## License
+## license
 
 MIT
+
+────────────────────────────────────────
+
+⏺ _Like memory itself, each line is small — but together they remember everything._
