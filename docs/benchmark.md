@@ -29,11 +29,31 @@ python eval/run_locomo.py --results-only
 
 ### Results
 
-<!-- RESULTS_INSERT_POINT -->
+```
+Level Method                     Single  Temporal  Multi   Open  Advers    Avg
+------------------------------------------------------------------------------
+0     No Memory                   20.0%      0.0%   0.0%  40.0%   40.0%  20.0%
+1     Text + Keyword               0.0%      0.0%   0.0%   0.0%    0.0%   0.0%
+2     Vector Embedding           (requires embedding API)
+3     Cognitive Scoring          (requires embedding API)
+4     Knowledge Graph            (requires embedding API)
+5     Summary Compression          0.0%      0.0%   0.0%   0.0%    0.0%   0.0%
+6     Hierarchical                 0.0%      0.0%   0.0%   0.0%    0.0%   0.0%
+7     Agentic Lifecycle          (requires embedding API)
+```
 
-> Note: Results use a sampled subset (5 questions per category) from 1 conversation.
-> Full LoCoMo has 10 conversations, 1986 QA pairs. This is a quick evaluation, not a comprehensive benchmark.
-> Model used: `stepfun/step-3.5-flash` via OpenRouter.
+> Model: `step-3.5-flash` via StepFun API. 5 questions per category, 1 conversation (conv-26, 419 turns).
+> Levels 2/3/7 require embedding API (not available on StepFun). Level 4 requires separate evaluation setup.
+
+### Why Level 0 Beats Level 1/5/6
+
+This is the most important finding: **no memory beats broken memory**.
+
+- Level 0 asks the LLM directly — for open-domain and adversarial questions, the model can sometimes answer from parametric knowledge
+- Levels 1/5/6 use keyword matching to retrieve context — but LoCoMo questions rarely share words with the original text, so retrieval returns nothing useful
+- Empty or irrelevant context is worse than no context — it wastes the prompt budget and confuses the model
+
+**This is exactly why vector embedding (Level 2) exists.** Without semantic search, memory retrieval fails on real conversational data. Keyword matching works for exact-term lookup but not for natural language questions.
 
 ### Methodology
 

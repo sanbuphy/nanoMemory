@@ -1,0 +1,142 @@
+{
+  "0": {
+    "name": "No Memory",
+    "scores": {
+      "temporal": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "multi_hop": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "single_hop": {
+        "correct": 1,
+        "total": 5,
+        "accuracy": 20.0
+      },
+      "open_domain": {
+        "correct": 2,
+        "total": 5,
+        "accuracy": 40.0
+      },
+      "adversarial": {
+        "correct": 2,
+        "total": 5,
+        "accuracy": 40.0
+      }
+    }
+  },
+  "1": {
+    "name": "Text + Keyword",
+    "scores": {
+      "temporal": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "multi_hop": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "single_hop": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "open_domain": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "adversarial": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      }
+    }
+  },
+  "5": {
+    "name": "Summary Compression",
+    "scores": {
+      "temporal": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "multi_hop": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "single_hop": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "open_domain": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "adversarial": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      }
+    }
+  },
+  "6": {
+    "name": "Hierarchical",
+    "scores": {
+      "temporal": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "multi_hop": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "single_hop": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "open_domain": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      },
+      "adversarial": {
+        "correct": 0,
+        "total": 5,
+        "accuracy": 0.0
+      }
+    }
+  },
+  "2": {
+    "name": "Vector Embedding",
+    "scores": {},
+    "note": "Requires embedding API or special setup"
+  },
+  "3": {
+    "name": "Cognitive Scoring",
+    "scores": {},
+    "note": "Requires embedding API or special setup"
+  },
+  "4": {
+    "name": "Knowledge Graph",
+    "scores": {},
+    "note": "Requires embedding API or special setup"
+  },
+  "7": {
+    "name": "Agentic Lifecycle",
+    "scores": {},
+    "note": "Requires embedding API or special setup"
+  }
+}
