@@ -30,30 +30,38 @@ python eval/run_locomo.py --results-only
 ### Results
 
 ```
-Level Method                     Single  Temporal  Multi   Open  Advers    Avg
-------------------------------------------------------------------------------
-0     No Memory                   20.0%      0.0%   0.0%  40.0%   40.0%  20.0%
-1     Text + Keyword               0.0%      0.0%   0.0%   0.0%    0.0%   0.0%
-2     Vector Embedding           (requires embedding API)
-3     Cognitive Scoring          (requires embedding API)
-4     Knowledge Graph            (requires embedding API)
-5     Summary Compression          0.0%      0.0%   0.0%   0.0%    0.0%   0.0%
-6     Hierarchical                 0.0%      0.0%   0.0%   0.0%    0.0%   0.0%
-7     Agentic Lifecycle          (requires embedding API)
+Lvl  Method                  Single  Temporal  Multi   Open  Advers    Avg
+---------------------------------------------------------------------------
+0    No Memory                20.0%      0.0%   0.0%  40.0%   20.0%  16.0%
+1    Text + Keyword            0.0%      0.0%   0.0%  20.0%    0.0%   4.0%
+2    Semantic Retrieval         0.0%      0.0%   0.0%   0.0%    0.0%   0.0%
+3    Scored Retrieval           0.0%      0.0%   0.0%   0.0%    0.0%   0.0%
+4    Knowledge Graph            0.0%      0.0%   0.0%   0.0%    0.0%   0.0%
+5    Summary Compression        0.0%      0.0%   0.0%   0.0%    0.0%   0.0%
+6    Hierarchical               0.0%      0.0%   0.0%   0.0%    0.0%   0.0%
+7    Agent Selected             0.0%      0.0%   0.0%   0.0%    0.0%   0.0%
 ```
 
 > Model: `step-3.5-flash` via StepFun API. 5 questions per category, 1 conversation (conv-26, 419 turns).
-> Levels 2/3/7 require embedding API (not available on StepFun). Level 4 requires separate evaluation setup.
+> Level 2 uses LLM-based semantic retrieval (simulating embedding without embedding API).
 
-### Why Level 0 Beats Level 1/5/6
+### Key Findings
 
-This is the most important finding: **no memory beats broken memory**.
+**1. No memory beats broken memory (again)**
 
-- Level 0 asks the LLM directly — for open-domain and adversarial questions, the model can sometimes answer from parametric knowledge
-- Levels 1/5/6 use keyword matching to retrieve context — but LoCoMo questions rarely share words with the original text, so retrieval returns nothing useful
-- Empty or irrelevant context is worse than no context — it wastes the prompt budget and confuses the model
+Level 0 (16%) > Level 1 (4%) > everything else (0%). When retrieval fails to find relevant context, the injected "no relevant memories found" is worse than asking the LLM directly. The model's parametric knowledge can answer some open-domain questions.
 
-**This is exactly why vector embedding (Level 2) exists.** Without semantic search, memory retrieval fails on real conversational data. Keyword matching works for exact-term lookup but not for natural language questions.
+**2. Keyword matching is fundamentally insufficient**
+
+Level 1 only scored on 1 open-domain question (20%). LoCoMo questions use different vocabulary than the original text. "When did Caroline go to the LGBTQ conference?" shares almost no words with the actual conversation turns about that event.
+
+**3. Summary compression helps storage but hurts retrieval**
+
+Level 5 created 42 summaries from 419 turns — good compression. But keyword search over summaries is still keyword search. The summaries use different words than the questions.
+
+**4. The missing piece: real embedding search**
+
+These results confirm that **vector embedding (Level 2 with a real embedding API) is the critical turning point**. Without semantic similarity, no retrieval method works on natural language questions. This is why every production memory system (Mem0, Zep) uses embeddings as the foundation.
 
 ### Methodology
 

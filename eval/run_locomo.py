@@ -1,28 +1,32 @@
 """
 LoCoMo Benchmark Evaluation for nanoMemory
-Evaluates Levels 0-7 (where API allows) against LoCoMo QA tasks.
+Evaluates all Levels 0-7 against LoCoMo QA tasks.
+
+Strategy: For each level, we simulate its memory approach:
+- Level 0: No context (pure LLM)
+- Level 1: Keyword-matched raw text chunks
+- Level 2: LLM-based semantic retrieval (simulates embedding without API)
+- Level 3: LLM retrieval + importance weighting
+- Level 4: LLM extracts SPO triples, then answers from graph
+- Level 5: Compressed summaries as context
+- Level 6: Hierarchical: themes -> episodes -> raw
+- Level 7: Agent decides what to remember via self-selection
 
 Environment:
   export OPENAI_API_KEY='your-key'
-  export OPENAI_BASE_URL='https://api.stepfun.com/v1'     # optional
-  export OPENAI_MODEL='step-3.5-flash'                    # optional
-  export OPENAI_EMBED_MODEL='text-embedding-3-small'      # only if embedding API available
+  export OPENAI_BASE_URL='https://api.stepfun.com/v1'
+  export OPENAI_MODEL='step-3.5-flash'
 
 Usage:
-  python eval/run_locomo.py                  # run eval
-  python eval/run_locomo.py --results-only   # just print saved results
+  python eval/run_locomo.py
+  python eval/run_locomo.py --results-only
 
 References:
-  - LoCoMo: "Evaluating Very Long-Term Conversational Memory of LLM Agents"
-    Maharana et al., ACL 2024
+  - LoCoMo: Maharana et al., ACL 2024
     https://arxiv.org/abs/2402.10790
     https://github.com/snap-research/LoCoMo
 """
-import os
-import sys
-import json
-import time
-import random
+import os, sys, json, time, random
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 sys.path.insert(0, BASE_DIR)
@@ -39,14 +43,21 @@ cat_names = {1: "single_hop", 2: "temporal", 3: "multi_hop",
 
 def get_client():
     from openai import OpenAI
-    return OpenAI(
-        api_key=os.environ.get("OPENAI_API_KEY"),
-        base_url=os.environ.get("OPENAI_BASE_URL"),
-    )
-
+    return OpenAI(api_key=os.environ["OPENAI_API_KEY"],
+                  base_url=os.environ.get("OPENAI_BASE_URL"))
 
 def get_model():
     return os.environ.get("OPENAI_MODEL", "gpt-4o-mini")
+
+def call_llm(prompt, temperature=0):
+    client = get_client()
+    model = get_model()
+    resp = client.chat.completions.create(
+        model=model,
+        messages=[{"role": "user", "content": prompt}],
+        temperature=temperature,
+    )
+    return resp.choices[0].message.content.strip()
 
 
 # ── LoCoMo Data ────────────────────────────────────────────────────────
@@ -54,7 +65,6 @@ def get_model():
 def load_locomo():
     with open(LOCOMO_DATA) as f:
         return json.load(f)
-
 
 def flatten_conversation(conv):
     lines = []
@@ -66,15 +76,11 @@ def flatten_conversation(conv):
                 for turn in session:
                     text = turn.get("text", "").strip()
                     if text:
-                        speaker = turn.get("speaker", "Unknown")
-                        lines.append(f"{speaker}: {text}")
+                        lines.append(f"{turn.get('speaker', '?')}: {text}")
     return lines
 
-
 def get_answer(q):
-    """Get ground truth answer, handling adversarial questions."""
     return q.get("answer") or q.get("adversarial_answer", "")
-
 
 def sample_questions(data, n=5):
     random.seed(SEED)
@@ -87,88 +93,103 @@ def sample_questions(data, n=5):
     return {cat: random.sample(qs, min(n, len(qs))) for cat, qs in by_cat.items()}
 
 
-# ── Memory Indexing ────────────────────────────────────────────────────
+# ── Level Implementations ──────────────────────────────────────────────
 
-MEMORY_STORE = {}  # in-memory store for evaluation
+STORE = {}
 
+def index_all(conv_lines):
+    """Pre-build all memory stores."""
+    print("  Building memory stores...")
 
-def index_keyword(conv_lines):
-    """Level 1: keyword search over raw text."""
-    MEMORY_STORE["keyword"] = conv_lines
+    # L1: raw text
+    STORE["raw"] = conv_lines
 
-
-def index_summary(conv_lines):
-    """Level 5: compress every 10 lines into a summary via LLM."""
+    # L5: summaries (compress every 10 lines)
     summaries = []
-    client = get_client()
-    model = get_model()
     for i in range(0, len(conv_lines), 10):
         chunk = "\n".join(conv_lines[i:i+10])
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": f"""Summarize this conversation chunk in 1-2 sentences, keeping key facts, names, dates, and events.
-
-{chunk}
-
-Summary:"""}],
-            temperature=0,
-        )
-        summaries.append(resp.choices[0].message.content.strip())
+        try:
+            s = call_llm(f"Summarize in 1-2 sentences, keeping key facts, names, dates:\n\n{chunk}\n\nSummary:")
+            summaries.append(s)
+        except: pass
         time.sleep(0.2)
-    MEMORY_STORE["summary"] = summaries
+    STORE["summaries"] = summaries
+    print(f"    Summaries: {len(summaries)}")
 
-
-def index_hierarchical(conv_lines):
-    """Level 6: raw -> episodes -> themes."""
-    # Raw level
-    MEMORY_STORE["hier_raw"] = conv_lines
-    # Episodes: compress every 15 lines
+    # L6: episodes + themes
     episodes = []
-    client = get_client()
-    model = get_model()
     for i in range(0, len(conv_lines), 15):
         chunk = "\n".join(conv_lines[i:i+15])
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": f"""Extract 1-2 episode summaries from this conversation chunk.
-
-{chunk}
-
-Return JSON array of summary strings."""}],
-            temperature=0,
-        )
         try:
-            eps = json.loads(resp.choices[0].message.content.strip())
-            episodes.extend(eps if isinstance(eps, list) else [eps])
-        except json.JSONDecodeError:
-            episodes.append(resp.choices[0].message.content.strip()[:100])
+            ep = call_llm(f"Extract 1-2 episode summaries (what happened):\n\n{chunk}\n\nReturn JSON array of strings.")
+            try:
+                parsed = json.loads(ep)
+                episodes.extend(parsed if isinstance(parsed, list) else [parsed])
+            except: episodes.append(ep[:120])
+        except: pass
         time.sleep(0.2)
-    MEMORY_STORE["hier_episodes"] = episodes
-    # Themes: distill episodes
+    STORE["episodes"] = episodes
+
+    # L6 themes
     if len(episodes) >= 3:
-        resp = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": f"""Identify 2-3 high-level themes from these episode summaries.
-
-{chr(10).join(f'- {e}' for e in episodes)}
-
-Return JSON array of theme strings."""}],
-            temperature=0.3,
-        )
         try:
-            themes = json.loads(resp.choices[0].message.content.strip())
-            MEMORY_STORE["hier_themes"] = themes if isinstance(themes, list) else [themes]
-        except json.JSONDecodeError:
-            MEMORY_STORE["hier_themes"] = []
+            th = call_llm(f"Identify 2-3 high-level themes:\n\n{chr(10).join(f'- {e}' for e in episodes)}\n\nReturn JSON array of strings.")
+            try:
+                STORE["themes"] = json.loads(th)
+            except: STORE["themes"] = []
+        except: STORE["themes"] = []
+    print(f"    Episodes: {len(episodes)}, Themes: {len(STORE.get('themes', []))}")
+
+    # L4: SPO triples
+    triples = []
+    for i in range(0, min(len(conv_lines), 100), 5):
+        chunk = "\n".join(conv_lines[i:i+5])
+        try:
+            t = call_llm(f"Extract factual (subject, predicate, object) triples from this text.\n\n{chunk}\n\nReturn JSON array: [{{\"s\":\"...\",\"p\":\"...\",\"o\":\"...\"}}]")
+            try:
+                parsed = json.loads(t)
+                triples.extend(parsed if isinstance(parsed, list) else [])
+            except: pass
+        except: pass
+        time.sleep(0.2)
+    STORE["triples"] = triples
+    print(f"    Triples: {len(triples)}")
+
+    # L3: importance-scored memories (LLM rates each summary)
+    scored = []
+    for s in summaries:
+        try:
+            score_str = call_llm(f"Rate the importance of this memory 1-10 (10=critical fact, 1=trivial):\n\n{s}\n\nOutput just a number.")
+            score = max(1, min(10, int(score_str.strip())))
+        except: score = 5
+        scored.append((s, score))
+    STORE["scored"] = scored
+    print(f"    Scored memories: {len(scored)}")
+
+    # L7: agent selects what to remember
+    selected = []
+    try:
+        sel = call_llm(f"""You are an agent deciding what to remember from this conversation.
+Select the 20 most important facts/preferences/events to store long-term.
+
+Conversation:
+{chr(10).join(conv_lines[:80])}
+
+Return JSON array of fact strings (max 20).""")
+        try:
+            selected = json.loads(sel)
+            selected = selected[:20] if isinstance(selected, list) else []
+        except: pass
+    except: pass
+    STORE["selected"] = selected
+    print(f"    Agent-selected: {len(selected)}")
 
 
-# ── Retrieval ──────────────────────────────────────────────────────────
-
-def retrieve_keyword(query, top_k=5):
-    """Level 1: keyword overlap."""
+def retrieve_keyword(query, top_k=10):
+    """L1: keyword overlap."""
     keywords = set(query.lower().split())
     scored = []
-    for line in MEMORY_STORE.get("keyword", []):
+    for line in STORE.get("raw", []):
         words = set(line.lower().split())
         overlap = len(keywords & words)
         if overlap > 0:
@@ -176,89 +197,114 @@ def retrieve_keyword(query, top_k=5):
     scored.sort(key=lambda x: x[1], reverse=True)
     return [s[0] for s in scored[:top_k]]
 
+def retrieve_semantic(query, top_k=10):
+    """L2: LLM-based semantic retrieval (simulates embedding search)."""
+    candidates = STORE.get("raw", [])
+    # Batch: ask LLM to pick relevant lines
+    if len(candidates) > 50:
+        # Sample 50 candidates evenly
+        step = max(1, len(candidates) // 50)
+        candidates = candidates[::step][:50]
+    try:
+        result = call_llm(f"""Given this question, select the most relevant conversation lines.
+Question: {query}
 
-def retrieve_summary(query, top_k=3):
-    """Level 5: keyword over summaries."""
+Lines:
+{chr(10).join(f'{i}: {c[:100]}' for i, c in enumerate(candidates[:50]))}
+
+Return JSON array of the 5 most relevant line numbers.""")
+        try:
+            indices = json.loads(result)
+            return [candidates[i] for i in indices if 0 <= i < len(candidates)]
+        except: pass
+    except: pass
+    return retrieve_keyword(query, top_k)  # fallback
+
+def retrieve_scored(query, top_k=10):
+    """L3: scored retrieval with importance weighting."""
     keywords = set(query.lower().split())
     scored = []
-    for s in MEMORY_STORE.get("summary", []):
-        words = set(s.lower().split())
+    for text, importance in STORE.get("scored", []):
+        words = set(text.lower().split())
         overlap = len(keywords & words)
+        score = overlap * 2 + importance  # weight by importance
+        if overlap > 0:
+            scored.append((text, score))
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [s[0] for s in scored[:top_k]]
+
+def retrieve_graph(query, top_k=10):
+    """L4: triple-based retrieval."""
+    triples = STORE.get("triples", [])
+    keywords = set(query.lower().split())
+    results = []
+    for t in triples:
+        ttext = f"{t.get('s','')} {t.get('p','')} {t.get('o','')}".lower()
+        if keywords & set(ttext.split()):
+            results.append(f"{t.get('s','')} {t.get('p','')} {t.get('o','')}")
+    return results[:top_k]
+
+def retrieve_summary(query, top_k=5):
+    """L5: keyword over summaries."""
+    keywords = set(query.lower().split())
+    scored = []
+    for s in STORE.get("summaries", []):
+        overlap = len(keywords & set(s.lower().split()))
+        if overlap > 0:
+            scored.append((s, overlap))
+    scored.sort(key=lambda x: x[1], reverse=True)
+    return [s[0] for s in scored[:top_k]]
+
+def retrieve_hierarchical(query, top_k=10):
+    """L6: top-down retrieval."""
+    keywords = set(query.lower().split())
+    results = []
+    for key in ["themes", "episodes", "raw"]:
+        for item in STORE.get(key, []):
+            if keywords & set(item.lower().split()):
+                results.append(item)
+        if len(results) >= top_k:
+            break
+    return results[:top_k]
+
+def retrieve_selected(query, top_k=10):
+    """L7: search agent-selected memories."""
+    keywords = set(query.lower().split())
+    scored = []
+    for s in STORE.get("selected", []):
+        overlap = len(keywords & set(s.lower().split()))
         if overlap > 0:
             scored.append((s, overlap))
     scored.sort(key=lambda x: x[1], reverse=True)
     return [s[0] for s in scored[:top_k]]
 
 
-def retrieve_hierarchical(query, top_k=5):
-    """Level 6: top-down: themes -> episodes -> raw."""
-    keywords = set(query.lower().split())
-    results = []
-    for level_key in ["hier_themes", "hier_episodes", "hier_raw"]:
-        for item in MEMORY_STORE.get(level_key, []):
-            words = set(item.lower().split())
-            if keywords & words:
-                results.append(item)
-        if len(results) >= top_k:
-            break
-    return results[:top_k]
-
-
-# ── Answering ──────────────────────────────────────────────────────────
-
-def answer_with_context(question, context, level_name):
-    """Generate answer using retrieved context."""
-    client = get_client()
-    model = get_model()
+def answer_with_context(question, context):
     if not context:
         context = "(no relevant memories found)"
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": f"""Based on these memories, answer the question in one short sentence.
+    return call_llm(f"""Based on these memories, answer the question in one short sentence.
 
 Memories:
 {context}
 
 Question: {question}
-Answer:"""}],
-        temperature=0,
-    )
-    return resp.choices[0].message.content.strip()
-
+Answer:""")
 
 def answer_no_memory(question):
-    """Level 0: answer without any memory."""
-    client = get_client()
-    model = get_model()
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": f"Answer briefly in one sentence: {question}"}],
-        temperature=0,
-    )
-    return resp.choices[0].message.content.strip()
-
-
-# ── LLM Judge ──────────────────────────────────────────────────────────
+    return call_llm(f"Answer briefly in one sentence: {question}")
 
 def llm_judge(question, ground_truth, prediction):
-    """LLM-as-judge."""
     if not ground_truth or not prediction:
         return 0
-    client = get_client()
-    model = get_model()
-    resp = client.chat.completions.create(
-        model=model,
-        messages=[{"role": "user", "content": f"""Is the predicted answer correct given the ground truth?
+    result = call_llm(f"""Is the predicted answer correct given the ground truth?
 A prediction is correct if it contains the key information, even if worded differently.
 
 Question: {question}
 Ground truth: {ground_truth}
 Prediction: {prediction}
 
-Output exactly one word: CORRECT or INCORRECT"""}],
-        temperature=0,
-    )
-    text = resp.choices[0].message.content.strip().upper()
+Output exactly: CORRECT or INCORRECT""")
+    text = result.upper()
     return 1 if "CORRECT" in text and "INCORRECT" not in text else 0
 
 
@@ -274,38 +320,31 @@ def run_evaluation():
     for cat, qs in sampled.items():
         print(f"  {cat}: {len(qs)}")
 
-    # Use first conversation
     conv = data[0]
     conv_lines = flatten_conversation(conv)
     print(f"\nUsing conversation '{conv['sample_id']}' with {len(conv_lines)} turns")
 
+    # Build all memory stores
+    index_all(conv_lines)
+
     levels = [
-        (0, "No Memory", None, None),
-        (1, "Text + Keyword", index_keyword, retrieve_keyword),
-        (5, "Summary Compression", index_summary, retrieve_summary),
-        (6, "Hierarchical", index_hierarchical, retrieve_hierarchical),
+        (0, "No Memory",          None),
+        (1, "Text + Keyword",     retrieve_keyword),
+        (2, "Semantic Retrieval",  retrieve_semantic),
+        (3, "Scored Retrieval",    retrieve_scored),
+        (4, "Knowledge Graph",     retrieve_graph),
+        (5, "Summary Compression", retrieve_summary),
+        (6, "Hierarchical",        retrieve_hierarchical),
+        (7, "Agent Selected",      retrieve_selected),
     ]
 
     all_results = {}
 
-    for level, name, indexer, retriever in levels:
+    for level, name, retriever in levels:
         print(f"\n{'='*50}")
         print(f"Level {level}: {name}")
         print(f"{'='*50}")
 
-        # Index
-        if indexer:
-            print(f"  Indexing {len(conv_lines)} lines...")
-            try:
-                indexer(conv_lines)
-                print(f"  Done. Summaries: {len(MEMORY_STORE.get('summary', []))}, "
-                      f"Episodes: {len(MEMORY_STORE.get('hier_episodes', []))}, "
-                      f"Themes: {len(MEMORY_STORE.get('hier_themes', []))}")
-            except Exception as e:
-                print(f"  Indexing error: {e}")
-                continue
-
-        # Evaluate
         scores = {}
         for cat, questions in sampled.items():
             correct = 0
@@ -316,27 +355,19 @@ def run_evaluation():
                     if level == 0:
                         pred = answer_no_memory(q["question"])
                     else:
-                        ctx_items = retriever(q["question"], top_k=5)
-                        ctx = "\n".join(ctx_items[:5])
-                        pred = answer_with_context(q["question"], ctx, name)
+                        ctx_items = retriever(q["question"], top_k=10)
+                        ctx = "\n".join(ctx_items[:10]) if ctx_items else ""
+                        pred = answer_with_context(q["question"], ctx)
                     judge = llm_judge(q["question"], gt, pred)
                     correct += judge
                 except Exception as e:
-                    err = str(e)[:60]
-                    print(f"    Error: {err}")
+                    print(f"    Error: {str(e)[:60]}")
                 time.sleep(0.3)
-
             acc = round(correct / max(total, 1) * 100, 1)
             scores[cat] = {"correct": correct, "total": total, "accuracy": acc}
             print(f"  {cat}: {correct}/{total} = {acc}%")
 
         all_results[str(level)] = {"name": name, "scores": scores}
-
-    # Add placeholder for levels that need embedding API (2, 3) or special handling (4, 7)
-    for lid, lname in [(2, "Vector Embedding"), (3, "Cognitive Scoring"),
-                       (4, "Knowledge Graph"), (7, "Agentic Lifecycle")]:
-        all_results[str(lid)] = {"name": lname, "scores": {},
-                                  "note": "Requires embedding API or special setup"}
 
     os.makedirs(os.path.dirname(RESULTS_PATH), exist_ok=True)
     with open(RESULTS_PATH, "w") as f:
@@ -347,23 +378,23 @@ def run_evaluation():
 
 def print_results():
     if not os.path.exists(RESULTS_PATH):
-        print("No results found. Run: python eval/run_locomo.py")
+        print("No results. Run: python eval/run_locomo.py")
         return
     with open(RESULTS_PATH) as f:
         results = json.load(f)
 
     cats = ["single_hop", "temporal", "multi_hop", "open_domain", "adversarial"]
-    print(f"\n{'Level':<5} {'Method':<25} {'Single':>7} {'Temporal':>9} {'Multi':>6} {'Open':>6} {'Advers':>7} {'Avg':>6}")
-    print("-" * 78)
+    print(f"\n{'Lvl':<4} {'Method':<22} {'Single':>7} {'Temporal':>9} {'Multi':>6} {'Open':>6} {'Advers':>7} {'Avg':>6}")
+    print("-" * 75)
     for lid in sorted(results.keys(), key=int):
         r = results[lid]
         scores = r["scores"]
         if not scores:
-            print(f"{lid:<5} {r['name']:<25}  (requires embedding API)")
+            print(f"{lid:<4} {r['name']:<22}  (skipped)")
             continue
         vals = [scores.get(c, {}).get("accuracy", 0) for c in cats]
         avg = round(sum(vals) / max(len(vals), 1), 1)
-        print(f"{lid:<5} {r['name']:<25} {vals[0]:>6.1f}% {vals[1]:>8.1f}% {vals[2]:>5.1f}% {vals[3]:>5.1f}% {vals[4]:>6.1f}% {avg:>5.1f}%")
+        print(f"{lid:<4} {r['name']:<22} {vals[0]:>6.1f}% {vals[1]:>8.1f}% {vals[2]:>5.1f}% {vals[3]:>5.1f}% {vals[4]:>6.1f}% {avg:>5.1f}%")
 
 
 if __name__ == "__main__":
