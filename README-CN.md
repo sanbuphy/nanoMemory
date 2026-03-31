@@ -49,17 +49,17 @@ python memory_production.py  # 打印对比表
 
 每个 Level 展示一种本质不同的记忆构建方式——不是功能堆叠，而是不同的范式。
 
-| Level | 方法 | 存储 | 检索 |
+| Level | 文件 | 存储 | 检索 |
 |:-----:|------|------|------|
-| 0 | 无记忆 | 无 | 无 |
-| 1 | 文本+关键词 | JSONL | 字符串匹配 |
-| 2 | 向量嵌入 | JSONL + embedding | 余弦相似度 |
-| 3 | 认知评分 | JSONL + embedding | alpha*相似度 + beta*时效 + gamma*重要性 |
-| 4 | 知识图谱 | SQLite SPO 三元组 | 图遍历 + 时序推理 |
-| 5 | 摘要压缩 | 压缩后的摘要 | 关键词匹配摘要 |
-| 6 | 层次化记忆 | 三层：原始 → 情节 → 主题 | 自顶向下逐层 |
-| 7 | 自主生命周期 | JSONL + CRUD | Agent 通过工具调用控制 |
-| 8 | 生产工具 | Mem0 / Zep / Graphiti | SDK 提供 |
+| 0 | [`agent.py`](agent.py) | 无 | 无 |
+| 1 | [`memory_file.py`](memory_file.py) | JSONL | 字符串匹配 |
+| 2 | [`memory_vector.py`](memory_vector.py) | JSONL + embedding | 余弦相似度 |
+| 3 | [`memory_scored.py`](memory_scored.py) | JSONL + embedding | alpha*相似度 + beta*时效 + gamma*重要性 |
+| 4 | [`memory_graph.py`](memory_graph.py) | SQLite SPO 三元组 | 图遍历 + 时序推理 |
+| 5 | [`memory_summary.py`](memory_summary.py) | 压缩后的摘要 | 关键词匹配摘要 |
+| 6 | [`memory_hierarchical.py`](memory_hierarchical.py) | 三层：原始 → 情节 → 主题 | 自顶向下逐层 |
+| 7 | [`memory_lifecycle.py`](memory_lifecycle.py) | JSONL + CRUD | Agent 通过工具调用控制 |
+| 8 | [`memory_production.py`](memory_production.py) | Mem0 / Zep / Graphiti | SDK 提供 |
 
 所有 Level 共享同一个 agent 循环：检索记忆 → 注入提示词 → LLM 响应 → 提取/保存记忆。不同的是*怎么存*和*怎么查*。
 

@@ -49,17 +49,17 @@ python memory_production.py  # prints comparison table
 
 Each level demonstrates a fundamentally different way to build memory — not feature stacking, but different paradigms.
 
-| level | method | storage | retrieval |
-|:-----:|--------|---------|-----------|
-| 0 | no memory | none | none |
-| 1 | text + keyword | JSONL | string matching |
-| 2 | vector embedding | JSONL + embeddings | cosine similarity |
-| 3 | cognitive scoring | JSONL + embeddings | alpha*sim + beta*recency + gamma*importance |
-| 4 | knowledge graph | SQLite SPO triples | graph traversal + temporal |
-| 5 | summary compression | compressed summaries | keyword over summaries |
-| 6 | hierarchical | 3-level: raw -> episode -> theme | top-down drill |
-| 7 | agentic lifecycle | JSONL with CRUD | agent-controlled tool calls |
-| 8 | production tools | Mem0 / Zep / Graphiti | SDK-provided |
+| level | file | storage | retrieval |
+|:-----:|------|---------|-----------|
+| 0 | [`agent.py`](agent.py) | none | none |
+| 1 | [`memory_file.py`](memory_file.py) | JSONL | string matching |
+| 2 | [`memory_vector.py`](memory_vector.py) | JSONL + embeddings | cosine similarity |
+| 3 | [`memory_scored.py`](memory_scored.py) | JSONL + embeddings | alpha*sim + beta*recency + gamma*importance |
+| 4 | [`memory_graph.py`](memory_graph.py) | SQLite SPO triples | graph traversal + temporal |
+| 5 | [`memory_summary.py`](memory_summary.py) | compressed summaries | keyword over summaries |
+| 6 | [`memory_hierarchical.py`](memory_hierarchical.py) | 3-level: raw -> episode -> theme | top-down drill |
+| 7 | [`memory_lifecycle.py`](memory_lifecycle.py) | JSONL with CRUD | agent-controlled tool calls |
+| 8 | [`memory_production.py`](memory_production.py) | Mem0 / Zep / Graphiti | SDK-provided |
 
 The agent loop is the same everywhere: retrieve memories -> inject into prompt -> LLM response -> extract/save memories. What changes is *how* you store and *how* you retrieve.
 
