@@ -283,6 +283,12 @@ How do you know if a memory system actually works? These benchmarks measure diff
 
 ---
 
+## benchmark
+
+Full LoCoMo evaluation results — [`docs/benchmark.md`](docs/benchmark.md)
+
+---
+
 ## license
 
 MIT

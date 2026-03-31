@@ -282,6 +282,12 @@ Mem0、Zep、Graphiti SDK 并排对比。~120 行。
 
 ---
 
+## 评测
+
+完整 LoCoMo 基准测试结果 — [`docs/benchmark-CN.md`](docs/benchmark-CN.md)
+
+---
+
 ## 许可证
 
 MIT

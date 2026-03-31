@@ -5,3 +5,4 @@ agent_memory.md
 *.db
 *.jsonl
 traces/
+eval/locomo10.json
