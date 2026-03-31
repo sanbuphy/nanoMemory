@@ -74,40 +74,171 @@ for _ in range(max_iterations):
 
 ## 各级详解
 
-### Level 0: 无记忆
-基线 Agent。对话之间无状态。~30 行。
-
-### Level 1: 文本+关键词
-LLM 提取事实存入 JSONL。关键词匹配检索。上限 200 条。~80 行。
-
-### Level 2: 向量嵌入
-OpenAI embedding 替代关键词匹配。numpy 余弦相似度实现语义搜索。~100 行。
-
-### Level 3: 认知评分
-Park 风格三因子评分：相似度 x 时效性 x 重要性。艾宾浩斯遗忘曲线。反思机制提炼洞察。~120 行。
-
-### Level 4: 知识图谱
-SQLite 中的主谓宾三元组。时序推理。实体归一化。矛盾检测——新事实自动使旧矛盾失效。~150 行。
-
-### Level 5: 摘要压缩
-LLM 将对话压缩为摘要，不存原文。定期合并旧摘要。~80 行。
-
-### Level 6: 层次化记忆
-三层结构：原始消息 → 情节 → 主题。自顶向下检索模拟人类回忆——先要点，后细节。~100 行。
-
-### Level 7: 自主生命周期
-Agent 自己通过工具调用控制记忆：`save`、`delete`、`update`、`search`。没有被动提取。~120 行。
-
-### Level 8: 生产工具
-开源记忆框架的并排对比：
+### Level 0: 无记忆 — [`agent.py`](agent.py)
 
 ```
-pip install mem0ai         # 事实提取 + 向量/图存储
-pip install zep-cloud      # 时序知识图谱
-pip install graphiti-core  # SPO 三元组 + Neo4j
+    User --> Agent --> LLM --> Response
+                  ^                |
+                  |___无状态_______|
+
+    每次对话从零开始。
 ```
 
-包含安装说明、用法示例和对比表。~120 行。
+基线 Agent，支持工具调用。~30 行。
+
+### Level 1: 文本+关键词 — [`memory_file.py`](memory_file.py)
+
+```
+    User --> Agent --> LLM --> Response
+      |                            |
+      |  ┌──────────────────┐      |
+      +->│  memory_facts.jsonl│<----+  提取事实
+         │  {"text": "..."}   │       关键词匹配
+         │  {"text": "..."}   │       下次检索
+         └──────────────────┘
+
+    存原文，搜关键词。
+```
+
+LLM 提取事实存入 JSONL。关键词匹配检索。~80 行。
+
+### Level 2: 向量嵌入 — [`memory_vector.py`](memory_vector.py)
+
+```
+    User --> Agent --> LLM --> Response
+      |                            |
+      |  ┌──────────────────┐      |
+      +->│  memory_vector.jsonl│<---+  提取事实
+         │  {"text", "embed"}  │       嵌入查询
+         │  cosine(query, db)  │       top-k 检索
+         └──────────────────┘
+
+    同样是 JSONL，但每条多了 embedding 向量。
+    用语义相似度替代字符串匹配。
+```
+
+OpenAI embedding + numpy 余弦相似度。~100 行。
+
+### Level 3: 认知评分 — [`memory_scored.py`](memory_scored.py)
+
+```
+    Score = alpha * 相似度 + beta * 时效性 + gamma * 重要性
+                                |                |
+                         艾宾浩斯衰减        LLM 打分 1-10
+                         (半衰期=30天)
+
+    ┌──────────────────────────────────────────────┐
+    │  记忆条目                                    │
+    │  text: "Alice 喜欢 Python"                  │
+    │  embedding: [0.12, -0.34, ...]               │
+    │  importance: 8                               │
+    │  timestamp: 2025-03-31                       │
+    │  access_count: 3                             │
+    └──────────────────────────────────────────────┘
+
+    + 反思：定期将记忆提炼为更高层的洞察
+```
+
+Park 风格三因子评分 + 反思机制。~120 行。
+
+### Level 4: 知识图谱 — [`memory_graph.py`](memory_graph.py)
+
+```
+    ┌─────────┐  "moved_to"   ┌────────┐
+    │  alice   │ ────────────> │ tokyo   │  valid_from: 2025-03
+    └─────────┘                └────────┘
+         |                           ^
+         | "works_as"                | (旧事实，已失效)
+         v                           |
+    ┌─────────┐  "moved_to"   ┌────────┐
+    │ engineer │               │ NYC     │  valid_until: 2025-03
+    └─────────┘               └────────┘
+
+    SQLite 存 (主, 谓, 宾) 三元组。
+    自动检测矛盾。旧事实自动失效。
+    时序推理：什么时间 什么是真的。
+```
+
+SQLite 中的 SPO 三元组 + 时序推理。~150 行。
+
+### Level 5: 摘要压缩 — [`memory_summary.py`](memory_summary.py)
+
+```
+    轮次1: "我喜欢 Python 和深色模式"      ─┐
+    轮次2: "我在一家叫 X 的创业公司工作"     ─┤
+    轮次3: "我们前端用 React"               ─┤  满 5 条时
+    轮次4: "我的狗叫 Buddy"                 ─┤  压缩
+    轮次5: "我周末在学 Rust"                ─┘
+                        |
+                        v
+    "用户是 Python 开发者，在创业公司 X 工作，
+     前端用 React，有一只叫 Buddy 的狗，
+     正在学 Rust。喜欢深色模式。"
+
+    一条摘要替代 N 条原始记录。
+```
+
+LLM 将对话压缩为摘要。~80 行。
+
+### Level 6: 层次化记忆 — [`memory_hierarchical.py`](memory_hierarchical.py)
+
+```
+    ┌─────────────────────────────────┐
+    │  主题 (level 2)                  │  "用户是多语言开发者"
+    │  高层模式和洞察                   │
+    ├─────────────────────────────────┤
+    │  情节 (level 1)                  │  "用户三月在学 Rust"
+    │  压缩后的事件摘要                 │
+    ├─────────────────────────────────┤
+    │  原始 (level 0)                  │  "我今天写了个 Rust CLI 工具"
+    │  原始对话片段                     │
+    └─────────────────────────────────┘
+
+    检索：先搜主题（便宜），再下钻到情节，最后原始（贵）。
+    像人类回忆：要点 → 背景 → 细节。
+```
+
+三层层次结构，自顶向下检索。~100 行。
+
+### Level 7: 自主生命周期 — [`memory_lifecycle.py`](memory_lifecycle.py)
+
+```
+    ┌───────────────────────────────────────────────┐
+    │  Agent 拥有 4 个记忆工具：                     │
+    │                                               │
+    │  memory_save(fact)     -- 这个值得记住        │
+    │  memory_delete(id)     -- 这个过时了          │
+    │  memory_update(id, ..) -- 这个变了            │
+    │  memory_search(query)  -- 让我查一下          │
+    │                                               │
+    │  Agent 自己决定何时使用每个工具。               │
+    │  没有自动提取。没有被动存储。                   │
+    └───────────────────────────────────────────────┘
+
+    Level 0-6: agent 每轮自动保存。
+    Level 7:   agent 自己选择存，或者不存。
+```
+
+Agent 通过函数调用自主控制记忆。~120 行。
+
+### Level 8: 生产工具 — [`memory_production.py`](memory_production.py)
+
+```
+    ┌─────────────┬──────────────┬──────────────┐
+    │    Mem0      │     Zep      │   Graphiti   │
+    │  pip install │  pip install │  pip install │
+    │   mem0ai     │  zep-cloud   │ graphiti-core│
+    ├─────────────┼──────────────┼──────────────┤
+    │ 事实提取     │ 时序知识图谱  │ SPO + Neo4j  │
+    │ 向量/图存储  │ 自动消矛盾    │ 矛盾检测     │
+    │ 快速上手     │ 生产级        │ 知识密集型   │
+    └─────────────┴──────────────┴──────────────┘
+
+    不用从零造轮子。选对工具就行。
+    或者继续造——这就是 Level 0-7 的意义。
+```
+
+Mem0、Zep、Graphiti SDK 并排对比。~120 行。
 
 ## 参考文献
 
